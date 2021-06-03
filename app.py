@@ -24,6 +24,13 @@ class Users(db.Model):
     email = db.Column(db.String(32), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
 
+class Data(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    id_user = db.Column(db.Integer, nullable=False)
+    filename = db.Column(db.String(150), nullable=False)
+    prediction = db.Column(db.String(5), nullable=False)
+    status = db.Column(db.String(10), nullable=False)
+
 # load model
 xception_chest = tf.keras.models.load_model('xception_chest.h5')
 # normalisazition [-1,1]
