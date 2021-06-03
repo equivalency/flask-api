@@ -2,12 +2,22 @@ from flask import Flask, request, json, jsonify
 from werkzeug.utils import secure_filename
 import urllib.request
 import os
+import tensorflow as tf
+import cv2
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from uuid import uuid4
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
+
+# load model
+xception_chest = tf.keras.models.load_model('xception_chest.h5')
+# normalisazition [-1,1]
+scaler = MinMaxScaler(feature_range=(-1, 1))
 
 # check extension
 def allowed_file(filename):
@@ -35,9 +45,45 @@ def upload_file():
      
     for file in files:      
         if file and allowed_file(file.filename):
+            
             filename = secure_filename(file.filename)
+            
+            # make unique id filename
+            ident = uuid4().__str__()[:4]
+            filename = ident + "-" + filename
+            
+            # save image to server
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            success = {'message' : 'Files {} successfully uploaded'.format(file.filename)}
+            
+            # read image
+            image = cv2.imread(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            
+            # risize image
+            image = cv2.resize(image,(224,224))
+
+            # normalization data
+            imagenorm = []
+            for j in np.array(image):
+                partimage = (np.array(scaler.fit_transform(j)))
+                imagenorm.append(partimage)
+            image = np.array(imagenorm)
+            image = np.expand_dims(image, axis=0)
+            
+            # prediction
+            xception_pred = xception_chest.predict(image)
+            probability = xception_pred[0]
+            if probability[0] > 0.5:
+                predict = str('%.2f' % (probability[0]*100) + '%')
+                success = { 'filename'  : filename,
+                            'prediction'   : predict,
+                            'status'    : 'COVID'}
+
+            else:
+                predict = str('%.2f' % ((1-probability[0])*100) + '%')
+                success = { 'filename'  : filename,
+                            'prediction'   : predict,
+                            'status'    : 'NonCOVID'}
+
             respons.append(dict(success))
         else:
             errors = {'message' : '{} File type is not allowed'.format(file.filename)}
