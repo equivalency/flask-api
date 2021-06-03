@@ -1,21 +1,31 @@
-from flask import Flask, request, json, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.utils import secure_filename
 import urllib.request
 import os
 import tensorflow as tf
 import cv2
 import numpy as np
+from flask import Flask, request, json, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from sklearn.preprocessing import MinMaxScaler
 from uuid import uuid4
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
 
 app = Flask(__name__)
+
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Setup the Flask-JWT-Extended extension
+app.config["JWT_SECRET_KEY"] = "changethis"  # Change this!
+# Setup database
 app.config['SQLALCHEMY_DATABASE_URI']='mysql://user:password@localhost:3306/database'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 
+jwt = JWTManager(app)
 db = SQLAlchemy(app)
 
 class Users(db.Model):
@@ -44,6 +54,35 @@ def allowed_file(filename):
 @app.route("/")
 def index():
     return "<p>Server OK!</p>"
+
+# route register
+@app.route('/auth/register', methods=['POST'])
+def signup_user():
+    data = request.get_json()
+    if Users.query.filter_by(email=data['email']).first() is not None:
+        return jsonify({'message': 'email already exist'}), 409
+    hashed_password = generate_password_hash(data['password'], method='sha256')
+    print(hashed_password)
+    new_user = Users(name=data['name'], email=data['email'], password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({'message': 'registered successfully'}), 201
+
+# route login
+@app.route('/auth/login', methods=['POST'])
+def login_user():
+    auth = request.authorization
+
+    if not auth or not auth.username or not auth.password:
+        return jsonify({'message': 'Bad username or password'}), 401
+
+    user = Users.query.filter_by(email=auth.username).first()
+    if check_password_hash(user.password, auth.password):
+        access_token = create_access_token(identity=user.id)
+        return jsonify(access_token=access_token)
+
+    return jsonify({'message': 'Bad username or password'}), 401
 
 #route upload
 @app.route('/upload', methods=['POST'])
