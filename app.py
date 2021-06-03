@@ -1,4 +1,5 @@
 from flask import Flask, request, json, jsonify
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 import urllib.request
 import os
@@ -9,10 +10,19 @@ from sklearn.preprocessing import MinMaxScaler
 from uuid import uuid4
 
 app = Flask(__name__)
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['SQLALCHEMY_DATABASE_URI']='mysql://user:password@localhost:3306/database'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 
-ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
+db = SQLAlchemy(app)
+
+class Users(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    email = db.Column(db.String(32), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)
 
 # load model
 xception_chest = tf.keras.models.load_model('xception_chest.h5')
