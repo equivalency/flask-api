@@ -157,5 +157,13 @@ def upload_file():
         resp.status_code = 500
         return resp
 
+@app.route("/protected", methods=["GET"])
+@jwt_required()
+def protected():
+    # Access the identity of the current user with get_jwt_identity
+    id_user = get_jwt_identity()
+    user = Users.query.filter_by(id=id_user).first()
+    return jsonify(logged_in_as=user.name), 200
+
 if __name__ == '__main__':
     app.run(debug=True)
