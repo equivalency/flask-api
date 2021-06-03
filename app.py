@@ -22,7 +22,8 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Setup the Flask-JWT-Extended extension
 app.config["JWT_SECRET_KEY"] = "changethis"  # Change this!
 # Setup database
-app.config['SQLALCHEMY_DATABASE_URI']='mysql://user:password@localhost:3306/database'
+# app.config['SQLALCHEMY_DATABASE_URI']='mysql://user:password@localhost:3306/database'
+app.config['SQLALCHEMY_DATABASE_URI']='mysql://root:@localhost:3306/capstone1'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 
 jwt = JWTManager(app)
@@ -86,7 +87,9 @@ def login_user():
 
 #route upload
 @app.route('/upload', methods=['POST'])
+@jwt_required()
 def upload_file():
+    id_user = get_jwt_identity()
     respons = []
     # check if the post request has the file part
     if 'files[]' not in request.files:
@@ -129,18 +132,26 @@ def upload_file():
             xception_pred = xception_chest.predict(image)
             probability = xception_pred[0]
             if probability[0] > 0.5:
-                predict = str('%.2f' % (probability[0]*100) + '%')
+                prediction = '%.2f' % (probability[0]*100) + '%'
                 success = { 'filename'  : filename,
-                            'prediction'   : predict,
+                            'prediction'   : prediction,
                             'status'    : 'COVID'}
-
+                # insert to database
+                new_data = Data(id_user=id_user, filename=filename, prediction=prediction, status='COVID')
+                db.session.add(new_data)
+                db.session.commit()
             else:
-                predict = str('%.2f' % ((1-probability[0])*100) + '%')
+                prediction = '%.2f' % ((1-probability[0])*100) + '%'
                 success = { 'filename'  : filename,
-                            'prediction'   : predict,
+                            'prediction'   : prediction,
                             'status'    : 'NonCOVID'}
+                # insert to database
+                new_data = Data(id_user=id_user, filename=filename, prediction=prediction, status='NonCOVID')
+                db.session.add(new_data)
+                db.session.commit()
 
             respons.append(dict(success))
+
         else:
             errors = {'message' : '{} File type is not allowed'.format(file.filename)}
  
@@ -156,6 +167,23 @@ def upload_file():
         resp = jsonify(errors)
         resp.status_code = 500
         return resp
+
+@app.route("/data", methods=["GET"])
+@jwt_required()
+def get_alldata():
+    # Access the identity of the current user with get_jwt_identity
+    respons = []
+    id_user = get_jwt_identity()
+    data = Data.query.filter_by(id_user=id_user).all()
+
+    print(data)
+    for row in data:
+        print(row)
+        success = { 'filename'  : row.filename,
+                    'prediction'   : row.prediction,
+                    'status'    : row.status }
+        respons.append(dict(success))
+    return jsonify(respons), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
