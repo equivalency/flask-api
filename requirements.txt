@@ -10,3 +10,5 @@ mysqlclient==2.0.3
 numpy==1.19.5
 opencv-python==4.5.2.52
 pytz==2021.1
+scikit-learn
+tensorflow
