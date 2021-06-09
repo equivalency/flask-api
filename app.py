@@ -3,6 +3,7 @@ import os
 import tensorflow as tf
 import cv2
 import numpy as np
+import pytz
 from flask import Flask, request, json, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
@@ -13,6 +14,7 @@ from flask_jwt_extended import create_access_token
 from flask_jwt_extended import get_jwt_identity
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -20,9 +22,8 @@ ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Setup the Flask-JWT-Extended extension
-app.config["JWT_SECRET_KEY"] = "changethis"  # Change this!
+app.config["JWT_SECRET_KEY"] = "s3cr3tk3y"  # Change this!
 # Setup database
-# app.config['SQLALCHEMY_DATABASE_URI']='mysql://user:password@localhost:3306/database'
 app.config['SQLALCHEMY_DATABASE_URI']='mysql://root:@localhost:3306/capstone1'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 
@@ -39,8 +40,10 @@ class Data(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     id_user = db.Column(db.Integer, nullable=False)
     filename = db.Column(db.String(150), nullable=False)
-    prediction = db.Column(db.String(5), nullable=False)
+    filepath = db.Column(db.String(150), nullable=True)
+    prediction = db.Column(db.String(8), nullable=False)
     status = db.Column(db.String(10), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
 
 # load model
 xception_chest = tf.keras.models.load_model('xception_chest.h5')
@@ -54,21 +57,20 @@ def allowed_file(filename):
 # route index
 @app.route("/")
 def index():
-    return "<p>Server OK!</p>"
+    return "<p>Server OK!!!</p>"
 
 # route register
 @app.route('/auth/register', methods=['POST'])
 def signup_user():
     data = request.get_json()
     if Users.query.filter_by(email=data['email']).first() is not None:
-        return jsonify({'message': 'email already exist'}), 409
+        return jsonify({'message': 'email sudah ada!'}), 409
     hashed_password = generate_password_hash(data['password'], method='sha256')
-    print(hashed_password)
     new_user = Users(name=data['name'], email=data['email'], password=hashed_password)
     db.session.add(new_user)
     db.session.commit()
 
-    return jsonify({'message': 'registered successfully'}), 201
+    return jsonify({'message': 'berhasil mendaftar'}), 201
 
 # route login
 @app.route('/auth/login', methods=['POST'])
@@ -76,14 +78,14 @@ def login_user():
     auth = request.authorization
 
     if not auth or not auth.username or not auth.password:
-        return jsonify({'message': 'Bad username or password'}), 401
+        return jsonify({'message': 'email atau password salah'}), 401
 
     user = Users.query.filter_by(email=auth.username).first()
     if check_password_hash(user.password, auth.password):
         access_token = create_access_token(identity=user.id)
-        return jsonify(access_token=access_token)
+        return jsonify({'id': user.id, 'name': user.name, 'email': user.email, 'token':access_token})
 
-    return jsonify({'message': 'Bad username or password'}), 401
+    return jsonify({'message': 'email atau password salah'}), 401
 
 #route upload
 @app.route('/upload', methods=['POST'])
@@ -91,14 +93,14 @@ def login_user():
 def upload_file():
     id_user = get_jwt_identity()
     respons = []
-    # check if the post request has the file part
+    created = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime("%Y-%m-%d %H:%M:%S")
+# check if the post request has the file part
     if 'files[]' not in request.files:
         resp = jsonify({'message' : 'No file part in the request'})
         resp.status_code = 400
         return resp
  
     files = request.files.getlist('files[]')
-     
     errors = {}
     success = False
      
@@ -110,13 +112,12 @@ def upload_file():
             # make unique id filename
             ident = uuid4().__str__()[:4]
             filename = ident + "-" + filename
-            
+            filepath = "/static/uploads/" + filename
             # save image to server
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            
+            print (os.path.join(app.config['UPLOAD_FOLDER'], filename))
             # read image
             image = cv2.imread(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            
             # risize image
             image = cv2.resize(image,(224,224))
 
@@ -133,25 +134,16 @@ def upload_file():
             probability = xception_pred[0]
             if probability[0] > 0.5:
                 prediction = '%.2f' % (probability[0]*100) + '%'
-                success = { 'filename'  : filename,
-                            'prediction'   : prediction,
-                            'status'    : 'COVID'}
-                # insert to database
-                new_data = Data(id_user=id_user, filename=filename, prediction=prediction, status='COVID')
+                new_data = Data(id_user=id_user, filename=filename, filepath=filepath, prediction=prediction, status='COVID', created_at=created)
                 db.session.add(new_data)
                 db.session.commit()
             else:
                 prediction = '%.2f' % ((1-probability[0])*100) + '%'
-                success = { 'filename'  : filename,
-                            'prediction'   : prediction,
-                            'status'    : 'NonCOVID'}
-                # insert to database
-                new_data = Data(id_user=id_user, filename=filename, prediction=prediction, status='NonCOVID')
+                new_data = Data(id_user=id_user, filename=filename, filepath=filepath, prediction=prediction, status='NonCOVID', created_at=created)
                 db.session.add(new_data)
                 db.session.commit()
-
+            success = { 'message' : 'Berhasil' }
             respons.append(dict(success))
-
         else:
             errors = {'message' : '{} File type is not allowed'.format(file.filename)}
  
@@ -168,6 +160,7 @@ def upload_file():
         resp.status_code = 500
         return resp
 
+# route get all data
 @app.route("/data", methods=["GET"])
 @jwt_required()
 def get_alldata():
@@ -176,14 +169,14 @@ def get_alldata():
     id_user = get_jwt_identity()
     data = Data.query.filter_by(id_user=id_user).all()
 
-    print(data)
     for row in data:
-        print(row)
         success = { 'filename'  : row.filename,
+                    'filepath' : row.filepath,
                     'prediction'   : row.prediction,
-                    'status'    : row.status }
+                    'status'    : row.status,
+                    'created_at' : row.created_at }
         respons.append(dict(success))
-    return jsonify(respons), 200
+    return jsonify({'data': respons}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
