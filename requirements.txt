@@ -1,0 +1,12 @@
+Flask==2.0.1
+Flask-JWT-Extended==4.2.1
+Flask-SQLAlchemy==2.5.1
+h5py==3.1.0
+Jinja2==3.0.1
+joblib==1.0.1
+keras-nightly==2.5.0.dev2021032900
+Keras-Preprocessing==1.1.2
+mysqlclient==2.0.3
+numpy==1.19.5
+opencv-python==4.5.2.52
+pytz==2021.1
