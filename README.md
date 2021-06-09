@@ -2,7 +2,7 @@
 
 API Documentation https://documenter.getpostman.com/view/11028759/TzY3CbqJ
 
-### Extension:
+## Extension:
 - [Flask](https://flask.palletsprojects.com/en/2.0.x/)
 
 - [Flask-SQLAlchemy](https://flask-sqlalchemy.palletsprojects.com/en/2.x/)
@@ -16,3 +16,20 @@ API Documentation https://documenter.getpostman.com/view/11028759/TzY3CbqJ
 - [opencv-python](https://opencv.org/)
 
 - [mysqlclient](https://pypi.org/project/mysqlclient/)
+
+## Usage
+Clone the repo:
+```
+git clone https://github.com/equivalency/flask-api.git
+cd flask-api/
+```
+Create virtualenv:
+```
+virtualenv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+Run:
+```
+python3 app.py
+```
