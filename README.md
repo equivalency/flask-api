@@ -1,5 +1,6 @@
 # API for COVID-19 Detection
 
+API Documentation https://documenter.getpostman.com/view/11028759/TzY3CbqJ
 
 ### Extension:
 - [Flask](https://flask.palletsprojects.com/en/2.0.x/)
